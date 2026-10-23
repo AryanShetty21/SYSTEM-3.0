@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Real Posture CVA — SYS v3.0 (Apex-CNN Studio)</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #111827;
+      --surface-elevated: #1f2937;
+      --border: #374151;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --accent: #06b6d4;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top, #111827 0%, #090d16 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .app-shell {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(17, 24, 39, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      border-radius: 14px;
+    }
+    .brand h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand p {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .posture-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--good);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      white-space: nowrap;
+    }
+    .posture-pill.warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    .posture-pill.bad {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--bad);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .settings-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 12px;
+    }
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .setting-item label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+    select, input[type="range"] {
+      background: var(--surface-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      width: 100%;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 620px) {
+      .controls { grid-template-columns: repeat(2, 1fr); }
+    }
+    button, label.btn {
+      background: var(--surface-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 10px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+    button.primary, label.btn.primary {
+      background: linear-gradient(135deg, #0891b2, #0284c7);
+      border-color: #38bdf8;
+    }
+    button.cnn-btn, label.btn.cnn-btn {
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      border-color: #a78bfa;
+    }
+    button:hover:not(:disabled), label.btn:hover { filter: brightness(1.12); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    input[type="file"] { display: none; }
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 560px) {
+      .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--accent);
+    }
+    .metric-card.good::before { background: var(--good); }
+    .metric-card.warn::before { background: var(--warn); }
+    .metric-card.bad::before { background: var(--bad); }
+    .metric-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .metric-value {
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin: 4px 0 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-norm { font-size: 0.7rem; color: var(--muted); }
+    .viewport {
+      position: relative;
+      width: 100%;
+      background: #030712;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      aspect-ratio: 3 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    video, img { display: none; }
+    canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      cursor: crosshair;
+    }
+    .hud-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .hud-tag {
+      background: rgba(9, 13, 22, 0.82);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: #e5e7eb;
+      font-variant-numeric: tabular-nums;
+    }
+    #status {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      background: rgba(9, 13, 22, 0.9);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="top-bar">
+      <div class="brand">
+        <h1>🧬 Real Posture CVA <span style="font-size:0.7rem; color:#a78bfa; font-weight:700;">SYS v3.0 · Apex-CNN Studio</span></h1>
+        <p>Active-Learning Labeler + Custom ONNX CNN Engine + Sub-Pixel C7/Tragus Lock</p>
+      </div>
+      <div id="posturePill" class="posture-pill">Awaiting Input</div>
+    </div>
+
+    <div class="settings-bar">
+      <div class="setting-item">
+        <label for="modelSelect">Inference Engine</label>
+        <select id="modelSelect">
+          <option value="heavy" selected>MediaPipe Heavy (29MB) + Cranial Lock</option>
+          <option value="full">MediaPipe Full (9MB)</option>
+          <option value="lite">MediaPipe Lite (5.5MB)</option>
+          <option value="onnx">Custom Apex-CVA CNN (.onnx)</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label for="c7UpRange">C7 Vertical Offset: <span id="c7UpLabel">30%</span></label>
+        <input type="range" id="c7UpRange" min="0" max="80" value="30" />
+      </div>
+      <div class="setting-item">
+        <label for="c7BackRange">C7 Posterior Offset: <span id="c7BackLabel">18%</span></label>
+        <input type="range" id="c7BackRange" min="0" max="60" value="18" />
+      </div>
+      <div class="setting-item">
+        <label for="smoothRange">Low-Pass Jitter Filter: <span id="smoothLabel">70%</span></label>
+        <input type="range" id="smoothRange" min="0" max="90" value="70" />
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="btn primary" for="photoInput">📷 Snap / Photo</label>
+      <input type="file" id="photoInput" accept="image/*" />
+      <button id="camBtn" disabled>🎥 Live Cam</button>
+      <button id="labelBtn" class="cnn-btn" disabled>🎯 Save CNN Label</button>
+      <label class="btn cnn-btn" for="onnxInput">🧠 Load .ONNX CNN</label>
+      <input type="file" id="onnxInput" accept=".onnx" />
+      <button id="exportBtn" disabled>📊 Export CSV</button>
+    </div>
+
+    <div class="telemetry-grid">
+      <div class="metric-card" id="cardCVA">
+        <div class="metric-header">
+          <span>CVA (C7 → Tragus)</span>
+          <span id="badgeCVA">--</span>
+        </div>
+        <div class="metric-value" id="valCVA">--°</div>
+        <div class="metric-norm">Normal: &gt; 50° (FHP &lt; 48°)</div>
+      </div>
+
+      <div class="metric-card" id="cardCRA">
+        <div class="metric-header">
+          <span>CRA (Head Tilt)</span>
+          <span id="badgeCRA">Tragus→Eye</span>
+        </div>
+        <div class="metric-value" id="valCRA">--°</div>
+        <div class="metric-norm">Cranial Horizontal Angle</div>
+      </div>
+
+      <div class="metric-card" id="cardFSA">
+        <div class="metric-header">
+          <span>FSA (Shoulder)</span>
+          <span id="badgeFSA">C7→Acromion</span>
+        </div>
+        <div class="metric-value" id="valFSA">--°</div>
+        <div class="metric-norm">Scapular Protraction</div>
+      </div>
+
+      <div class="metric-card" id="cardTrunk">
+        <div class="metric-header">
+          <span>Trunk Inclination</span>
+          <span id="badgeTrunk">--</span>
+        </div>
+        <div class="metric-value" id="valTrunk">--°</div>
+        <div class="metric-norm">Target: &lt; 10° from vertical</div>
+      </div>
+    </div>
+
+    <div class="viewport">
+      <video id="video" playsinline muted></video>
+      <img id="sourceImage" alt="Uploaded lateral posture frame" />
+      <canvas id="outputCanvas"></canvas>
+      <div class="hud-overlay">
+        <div class="hud-tag" id="sideTag">Engine: MediaPipe Heavy</div>
+        <div class="hud-tag" id="dragHintTag">💡 Drag C7/Tragus onto bone → Tap 'Save CNN Label'</div>
+      </div>
+      <div id="status">Loading MediaPipe Pose Heavy model...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      PoseLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    const MODEL_URLS = {
+      heavy: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+      full: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+      lite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    };
+
+    const statusEl = document.getElementById("status");
+    const posturePill = document.getElementById("posturePill");
+    const modelSelect = document.getElementById("modelSelect");
+    const c7UpRange = document.getElementById("c7UpRange");
+    const c7UpLabel = document.getElementById("c7UpLabel");
+    const c7BackRange = document.getElementById("c7BackRange");
+    const c7BackLabel = document.getElementById("c7BackLabel");
+    const smoothRange = document.getElementById("smoothRange");
+    const smoothLabel = document.getElementById("smoothLabel");
+
+    const photoInput = document.getElementById("photoInput");
+    const onnxInput = document.getElementById("onnxInput");
+    const camBtn = document.getElementById("camBtn");
+    const labelBtn = document.getElementById("labelBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const video = document.getElementById("video");
+    const sourceImage = document.getElementById("sourceImage");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
+    const sideTag = document.getElementById("sideTag");
+
+    let visionResolver = null;
+    let poseLandmarker = null;
+    let onnxSession = null;
+    let runningMode = "IMAGE";
+    let webcamRunning = false;
+    let facingMode = "environment";
+    let currentStream = null;
+    let currentPhotoName = "lateral_frame.jpg";
+
+    let smoothedLandmarks = null;
+    let lastRawLandmarks = null;
+    let sessionLogs = [];
+
+    let manualNodes = {
+      c7: null,
+      tragus: null,
+      eye: null,
+      acromion: null,
+      hip: null,
+      sideLabel: "Lateral"
+    };
+    let draggingKey = null;
+
+    c7UpRange.addEventListener("input", () => {
+      c7UpLabel.textContent = `${c7UpRange.value}%`;
+      if (!webcamRunning && lastRawLandmarks) recomputeFromStaticPhoto();
+    });
+    c7BackRange.addEventListener("input", () => {
+      c7BackLabel.textContent = `${c7BackRange.value}%`;
+      if (!webcamRunning && lastRawLandmarks) recomputeFromStaticPhoto();
+    });
+    smoothRange.addEventListener("input", () => {
+      smoothLabel.textContent = `${smoothRange.value}%`;
+    });
+
+    onnxInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        statusEl.textContent = `Loading custom ONNX CNN (${file.name})...`;
+        const buffer = await file.arrayBuffer();
+        onnxSession = await window.ort.InferenceSession.create(buffer);
+        modelSelect.value = "onnx";
+        sideTag.textContent = `Engine: Apex-CVA ONNX (${file.name})`;
+        statusEl.textContent = `Custom Apex-CVA CNN loaded! Snap a photo or start live camera.`;
+      } catch (err) {
+        statusEl.textContent = "ONNX load error: " + err.message;
+      }
+    });
+
+    async function loadPoseModel(variant = "heavy") {
+      if (variant === "onnx") {
+        if (!onnxSession) {
+          statusEl.textContent = "Tap 'Load .ONNX CNN' to select your trained apex_cva_cnn.onnx file.";
+        }
+        return;
+      }
+      try {
+        camBtn.disabled = true;
+        statusEl.textContent = `Loading ${variant.toUpperCase()} biomechanical model...`;
+        if (!visionResolver) {
+          visionResolver = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+          );
+        }
+        if (poseLandmarker) poseLandmarker.close();
+        poseLandmarker = await PoseLandmarker.createFromOptions(visionResolver, {
+          baseOptions: {
+            modelAssetPath: MODEL_URLS[variant],
+            delegate: "GPU"
+          },
+          runningMode: runningMode,
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.55,
+          minPosePresenceConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+        smoothedLandmarks = null;
+        camBtn.disabled = false;
+        sideTag.textContent = `Engine: MediaPipe ${variant.toUpperCase()}`;
+        statusEl.textContent = `Ready (${variant.toUpperCase()} active). Upload a 90° side-profile photo or start camera.`;
+      } catch (err) {
+        statusEl.textContent = "Model load error: " + err.message;
+      }
+    }
+
+    modelSelect.addEventListener("change", () => loadPoseModel(modelSelect.value));
+    loadPoseModel("heavy");
+
+    async function runOnnxInference(imgSource, width, height) {
+      const offCanvas = document.createElement("canvas");
+      offCanvas.width = 256;
+      offCanvas.height = 256;
+      const offCtx = offCanvas.getContext("2d");
+      offCtx.drawImage(imgSource, 0, 0, 256, 256);
+      const imgData = offCtx.getImageData(0, 0, 256, 256).data;
+
+      const floatData = new Float32Array(3 * 256 * 256);
+      const planeSize = 256 * 256;
+      for (let i = 0; i < planeSize; i++) {
+        floatData[i] = imgData[i * 4] / 255.0;
+        floatData[planeSize + i] = imgData[i * 4 + 1] / 255.0;
+        floatData[2 * planeSize + i] = imgData[i * 4 + 2] / 255.0;
+      }
+
+      const inputTensor = new window.ort.Tensor("float32", floatData, [1, 3, 256, 256]);
+      const outputs = await onnxSession.run({ input_rgb: inputTensor });
+      const kp = outputs.keypoints_xy.data;
+
+      return {
+        sideLabel: "Apex-CNN Direct",
+        c7: { x: kp[0] * width, y: kp[1] * height },
+        tragus: { x: kp[2] * width, y: kp[3] * height },
+        eye: { x: kp[4] * width, y: kp[5] * height },
+        acromion: { x: kp[6] * width, y: kp[7] * height },
+        hip: { x: kp[8] * width, y: kp[9] * height }
+      };
+    }
+
+    function filterLandmarks(rawLm, isVideoFrame) {
+      if (!isVideoFrame || !smoothedLandmarks) {
+        smoothedLandmarks = rawLm.map((pt) => ({ ...pt }));
+        return smoothedLandmarks;
+      }
+      const alpha = 1 - parseInt(smoothRange.value, 10) / 100;
+      smoothedLandmarks = rawLm.map((pt, i) => {
+        const prev = smoothedLandmarks[i] || pt;
+        return {
+          x: alpha * pt.x + (1 - alpha) * prev.x,
+          y: alpha * pt.y + (1 - alpha) * prev.y,
+          z: alpha * pt.z + (1 - alpha) * prev.z,
+          visibility: pt.visibility
+        };
+      });
+      return smoothedLandmarks;
+    }
+
+    function calcHorizontalAngle(basePt, targetPt) {
+      const dy = basePt.y - targetPt.y;
+      const dx = Math.abs(targetPt.x - basePt.x);
+      return (Math.atan2(dy, Math.max(dx, 1e-5)) * 180.0) / Math.PI;
+    }
+
+    function calcVerticalAngle(bottomPt, topPt) {
+      const dx = Math.abs(topPt.x - bottomPt.x);
+      const dy = Math.max(bottomPt.y - topPt.y, 1e-5);
+      return (Math.atan2(dx, dy) * 180.0) / Math.PI;
+    }
+
+    function computeAnatomicalNodes(lm, width, height) {
+      const rightVis = (lm[8]?.visibility || 0) + (lm[12]?.visibility || 0);
+      const leftVis = (lm[7]?.visibility || 0) + (lm[11]?.visibility || 0);
+      const isRightProfile = rightVis >= leftVis;
+
+      const earLm = isRightProfile ? lm[8] : lm[7];
+      const eyeLm = isRightProfile ? lm[5] : lm[2];
+      const shLm = isRightProfile ? lm[12] : lm[11];
+      const hipLm = isRightProfile ? lm[24] : lm[23];
+
+      const earX = earLm.x * width, earY = earLm.y * height;
+      const eyeX = eyeLm.x * width, eyeY = eyeLm.y * height;
+      const acromionX = shLm.x * width, acromionY = shLm.y * height;
+      const hipX = hipLm ? hipLm.x * width : acromionX;
+      const hipY = hipLm ? hipLm.y * height : acromionY + 200;
+
+      const facingRightOnScreen = eyeX >= earX;
+      const posteriorDirX = facingRightOnScreen ? -1 : 1;
+      const neckVertDist = Math.abs(acromionY - earY);
+
+      const tragusX = earX + (eyeX - earX) * 0.15;
+      const tragusY = earY + (eyeY - earY) * 0.15;
+
+      const upFactor = parseInt(c7UpRange.value, 10) / 100;
+      const backFactor = parseInt(c7BackRange.value, 10) / 100;
+
+      const c7X = acromionX + posteriorDirX * (neckVertDist * backFactor);
+      const c7Y = acromionY - (neckVertDist * upFactor);
+
+      return {
+        sideLabel: isRightProfile ? "Right Lateral" : "Left Lateral",
+        tragus: { x: tragusX, y: tragusY },
+        c7: { x: c7X, y: c7Y },
+        eye: { x: eyeX, y: eyeY },
+        acromion: { x: acromionX, y: acromionY },
+        hip: { x: hipX, y: hipY }
+      };
+    }
+
+    function drawAndMeasure(nodes, width, height) {
+      const { c7, tragus, eye, acromion, hip } = nodes;
+
+      const cva = calcHorizontalAngle(c7, tragus);
+      const cra = calcHorizontalAngle(tragus, eye);
+      const fsa = calcVerticalAngle(acromion, c7);
+      const trunk = calcVerticalAngle(hip, acromion);
+
+      const cvaStatus = cva >= 50 ? "good" : cva >= 44 ? "warn" : "bad";
+      updateCard("CVA", cva, cvaStatus, cvaStatus === "good" ? "Normal" : cvaStatus === "warn" ? "Mild FHP" : "Severe FHP");
+
+      document.getElementById("valCRA").textContent = `${cra.toFixed(1)}°`;
+      document.getElementById("valFSA").textContent = `${fsa.toFixed(1)}°`;
+      const trunkStatus = trunk < 10 ? "good" : trunk < 18 ? "warn" : "bad";
+      updateCard("Trunk", trunk, trunkStatus, trunkStatus === "good" ? "Upright" : "Slouch");
+
+      if (cvaStatus === "bad") {
+        posturePill.textContent = `⚠️ FHP Detected (CVA ${cva.toFixed(1)}°)`;
+        posturePill.className = "posture-pill bad";
+      } else if (cvaStatus === "warn") {
+        posturePill.textContent = `Borderline CVA (${cva.toFixed(1)}°)`;
+        posturePill.className = "posture-pill warn";
+      } else {
+        posturePill.textContent = `✓ Healthy CVA (${cva.toFixed(1)}°)`;
+        posturePill.className = "posture-pill";
+      }
+
+      ctx.save();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.moveTo(c7.x - 140, c7.y);
+      ctx.lineTo(c7.x + 140, c7.y);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(156, 163, 175, 0.45)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(hip.x, 0);
+      ctx.lineTo(hip.x, height);
+      ctx.stroke();
+      ctx.restore();
+
+      drawVector(hip, acromion, getColor(trunkStatus), 3.5);
+      drawVector(c7, acromion, "#a855f7", 3.5);
+      drawVector(c7, tragus, getColor(cvaStatus), 5);
+      drawVector(tragus, eye, "#06b6d4", 3);
+
+      drawNode(c7, "#ec4899", `C7 (${cva.toFixed(1)}° CVA)`);
+      drawNode(tragus, "#10b981", "Tragus");
+      drawNode(eye, "#06b6d4", `Eye (${cra.toFixed(0)}° CRA)`);
+      drawNode(acromion, "#a855f7", `Acromion (${fsa.toFixed(0)}° FSA)`);
+      drawNode(hip, "#f59e0b", "Hip");
+
+      sessionLogs.push({
+        timestamp: new Date().toISOString(),
+        profile: nodes.sideLabel,
+        cva_deg: cva.toFixed(2),
+        cra_deg: cra.toFixed(2),
+        fsa_deg: fsa.toFixed(2),
+        trunk_deg: trunk.toFixed(2)
+      });
+      exportBtn.disabled = false;
+      labelBtn.disabled = false;
+    }
+
+    function drawVector(p1, p2, color, width) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawNode(pt, color, label) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 7, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+
+      if (label) {
+        ctx.font = "bold 13px sans-serif";
+        const pad = 6;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(9, 13, 22, 0.88)";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(pt.x + 12, pt.y - 14, tw + pad * 2, 22, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#f9fafb";
+        ctx.fillText(label, pt.x + 12 + pad, pt.y + 1);
+      }
+      ctx.restore();
+    }
+
+    function getColor(status) {
+      if (status === "good") return "#10b981";
+      if (status === "warn") return "#f59e0b";
+      return "#ef4444";
+    }
+
+    function updateCard(name, val, status, badgeText) {
+      const card = document.getElementById(`card${name}`);
+      card.className = `metric-card ${status}`;
+      document.getElementById(`val${name}`).textContent = `${val.toFixed(1)}°`;
+      document.getElementById(`badge${name}`).textContent = badgeText;
+    }
+
+    function recomputeFromStaticPhoto() {
+      if (!lastRawLandmarks) return;
+      ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+      manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height);
+      drawAndMeasure(manualNodes, canvas.width, canvas.height);
+    }
+
+    function redrawManualStaticPhoto() {
+      if (!manualNodes || !sourceImage.src) return;
+      ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+      drawAndMeasure(manualNodes, canvas.width, canvas.height);
+    }
+
+    function getCanvasCoords(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    function onPointerDown(evt) {
+      if (webcamRunning || !manualNodes.c7) return;
+      const pt = getCanvasCoords(evt);
+      const hitRadius = Math.max(canvas.width, canvas.height) * 0.045;
+      for (const key of ["c7", "tragus", "eye", "acromion", "hip"]) {
+        const node = manualNodes[key];
+        if (node && Math.hypot(pt.x - node.x, pt.y - node.y) <= hitRadius) {
+          draggingKey = key;
+          evt.preventDefault();
+          break;
+        }
+      }
+    }
+
+    function onPointerMove(evt) {
+      if (!draggingKey || webcamRunning) return;
+      evt.preventDefault();
+      const pt = getCanvasCoords(evt);
+      manualNodes[draggingKey] = { x: pt.x, y: pt.y };
+      redrawManualStaticPhoto();
+      statusEl.textContent = `Fine-tuning ${draggingKey.toUpperCase()} bony landmark...`;
+    }
+
+    function onPointerUp() {
+      if (draggingKey) {
+        statusEl.textContent = `Locked ${draggingKey.toUpperCase()}! Tap 'Save CNN Label' to export training JSON.`;
+        draggingKey = null;
+      }
+    }
+
+    canvas.addEventListener("mousedown", onPointerDown);
+    canvas.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+    canvas.addEventListener("touchstart", onPointerDown, { passive: false });
+    canvas.addEventListener("touchmove", onPointerMove, { passive: false });
+    window.addEventListener("touchend", onPointerUp);
+
+    photoInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      currentPhotoName = file.name;
+      if (webcamRunning) stopCamera();
+
+      const url = URL.createObjectURL(file);
+      sourceImage.onload = async () => {
+        canvas.width = sourceImage.naturalWidth;
+        canvas.height = sourceImage.naturalHeight;
+        ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+        if (modelSelect.value === "onnx" && onnxSession) {
+          manualNodes = await runOnnxInference(sourceImage, canvas.width, canvas.height);
+          drawAndMeasure(manualNodes, canvas.width, canvas.height);
+          statusEl.textContent = "Predicted directly by your Custom Apex-CVA ONNX CNN!";
+        } else if (poseLandmarker) {
+          if (runningMode !== "IMAGE") {
+            runningMode = "IMAGE";
+            await poseLandmarker.setOptions({ runningMode: "IMAGE" });
+          }
+          const result = poseLandmarker.detect(sourceImage);
+          if (result.landmarks && result.landmarks.length > 0) {
+            lastRawLandmarks = result.landmarks[0];
+            manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height);
+            drawAndMeasure(manualNodes, canvas.width, canvas.height);
+            statusEl.textContent = "Drag C7/Tragus onto exact bony landmarks, then tap 'Save CNN Label'!";
+          } else {
+            statusEl.textContent = "No pose detected in photo.";
+          }
+        }
+        URL.revokeObjectURL(url);
+      };
+      sourceImage.src = url;
+    });
+
+    labelBtn.addEventListener("click", () => {
+      if (!manualNodes.c7 || !canvas.width) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const annotation = {
+        image_path: currentPhotoName,
+        image_width: w,
+        image_height: h,
+        cva_deg: calcHorizontalAngle(manualNodes.c7, manualNodes.tragus).toFixed(2),
+        cra_deg: calcHorizontalAngle(manualNodes.tragus, manualNodes.eye).toFixed(2),
+        fsa_deg: calcVerticalAngle(manualNodes.acromion, manualNodes.c7).toFixed(2),
+        keypoints: {
+          c7_spinous: { x: +(manualNodes.c7.x / w).toFixed(6), y: +(manualNodes.c7.y / h).toFixed(6) },
+          tragus: { x: +(manualNodes.tragus.x / w).toFixed(6), y: +(manualNodes.tragus.y / h).toFixed(6) },
+          eye_canthus: { x: +(manualNodes.eye.x / w).toFixed(6), y: +(manualNodes.eye.y / h).toFixed(6) },
+          acromion: { x: +(manualNodes.acromion.x / w).toFixed(6), y: +(manualNodes.acromion.y / h).toFixed(6) },
+          hip_trochanter: { x: +(manualNodes.hip.x / w).toFixed(6), y: +(manualNodes.hip.y / h).toFixed(6) }
+        }
+      };
+      const blob = new Blob([JSON.stringify(annotation, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `label_${currentPhotoName.replace(/\.[^/.]+$/, "")}.json`;
+      a.click();
+      statusEl.textContent = "Saved ground-truth CNN training label JSON for apex_cva_cnn.py!";
+    });
+
+    async function startCamera() {
+      if (!poseLandmarker && !onnxSession) return;
+      try {
+        if (currentStream) currentStream.getTracks().forEach((t) => t.stop());
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        video.srcObject = currentStream;
+        await video.play();
+
+        if (poseLandmarker && runningMode !== "VIDEO") {
+          runningMode = "VIDEO";
+          await poseLandmarker.setOptions({ runningMode: "VIDEO" });
+        }
+        smoothedLandmarks = null;
+        webcamRunning = true;
+        camBtn.textContent = "⏹ Stop Cam";
+        statusEl.textContent = "Live lateral tracking active.";
+        requestAnimationFrame(predictWebcam);
+      } catch (err) {
+        statusEl.textContent = "Live camera requires HTTPS/localhost on Android. Use 'Snap / Photo'.";
+      }
+    }
+
+    function stopCamera() {
+      webcamRunning = false;
+      if (currentStream) {
+        currentStream.getTracks().forEach((t) => t.stop());
+        currentStream = null;
+      }
+      camBtn.textContent = "🎥 Live Cam";
+    }
+
+    camBtn.addEventListener("click", () => {
+      if (webcamRunning) stopCamera();
+      else startCamera();
+    });
+
+    let lastVideoTime = -1;
+    async function predictWebcam() {
+      if (!webcamRunning) return;
+      if (video.currentTime !== lastVideoTime && video.readyState >= 2) {
+        lastVideoTime = video.currentTime;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        if (modelSelect.value === "onnx" && onnxSession) {
+          manualNodes = await runOnnxInference(video, canvas.width, canvas.height);
+          drawAndMeasure(manualNodes, canvas.width, canvas.height);
+        } else if (poseLandmarker) {
+          const result = poseLandmarker.detectForVideo(video, performance.now());
+          if (result.landmarks && result.landmarks.length > 0) {
+            const filtered = filterLandmarks(result.landmarks[0], true);
+            manualNodes = computeAnatomicalNodes(filtered, canvas.width, canvas.height);
+            drawAndMeasure(manualNodes, canvas.width, canvas.height);
+          }
+        }
+      }
+      if (webcamRunning) requestAnimationFrame(predictWebcam);
+    }
+
+    exportBtn.addEventListener("click", () => {
+      if (sessionLogs.length === 0) return;
+      const headers = ["timestamp", "profile", "cva_deg", "cra_deg", "fsa_deg", "trunk_deg"];
+      const rows = sessionLogs.map((r) => headers.map((h) => r[h]).join(","));
+      const csv = [headers.join(","), ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `real_posture_cva_${Date.now()}.csv`;
+      a.click();
+    });
+  </script>
+</body>
+</html>
