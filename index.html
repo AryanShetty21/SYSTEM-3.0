@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Real Posture CVA — SYS v3.0 (Apex-CNN Studio)</title>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
+  <title>Real Posture CVA — SYS v3.5 (In-Browser Self-Training CNN)</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
   <style>
     :root {
       --bg: #090d16;
@@ -17,6 +17,7 @@
       --good: #10b981;
       --warn: #f59e0b;
       --bad: #ef4444;
+      --purple: #8b5cf6;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -31,7 +32,7 @@
     }
     .app-shell {
       width: 100%;
-      max-width: 760px;
+      max-width: 780px;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -49,7 +50,6 @@
     .brand h1 {
       font-size: 1.1rem;
       font-weight: 700;
-      letter-spacing: -0.01em;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -81,6 +81,25 @@
       color: var(--bad);
       border-color: rgba(239, 68, 68, 0.5);
     }
+    .cnn-banner {
+      background: linear-gradient(90deg, rgba(124, 58, 237, 0.18), rgba(6, 182, 212, 0.15));
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+    .cnn-stats {
+      display: flex;
+      gap: 14px;
+      font-variant-numeric: tabular-nums;
+      color: #e9d5ff;
+      font-weight: 600;
+    }
     .settings-bar {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -99,7 +118,6 @@
       font-size: 0.7rem;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.04em;
       font-weight: 600;
     }
     select, input[type="range"] {
@@ -113,10 +131,10 @@
     }
     .controls {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
     }
-    @media (max-width: 620px) {
+    @media (max-width: 600px) {
       .controls { grid-template-columns: repeat(2, 1fr); }
     }
     button, label.btn {
@@ -139,7 +157,7 @@
       background: linear-gradient(135deg, #0891b2, #0284c7);
       border-color: #38bdf8;
     }
-    button.cnn-btn, label.btn.cnn-btn {
+    button.cnn-btn {
       background: linear-gradient(135deg, #7c3aed, #4f46e5);
       border-color: #a78bfa;
     }
@@ -253,20 +271,27 @@
   <div class="app-shell">
     <div class="top-bar">
       <div class="brand">
-        <h1>🧬 Real Posture CVA <span style="font-size:0.7rem; color:#a78bfa; font-weight:700;">SYS v3.0 · Apex-CNN Studio</span></h1>
-        <p>Active-Learning Labeler + Custom ONNX CNN Engine + Sub-Pixel C7/Tragus Lock</p>
+        <h1>🧬 Real Posture CVA <span style="font-size:0.7rem; color:#a78bfa; font-weight:700;">SYS v3.5 · Zero-Cloud Self-Training CNN</span></h1>
+        <p>Built-In TensorFlow.js Convolutional + Biomechanical Neural Network (No Colab or Codespace Needed)</p>
       </div>
       <div id="posturePill" class="posture-pill">Awaiting Input</div>
     </div>
 
+    <div class="cnn-banner">
+      <div><strong>🧠 In-Browser Apex-CVA Neural Network:</strong> <span id="cnnStateText">Initialized (Conv2D + Osteological MLP)</span></div>
+      <div class="cnn-stats">
+        <span id="cnnEpochStat">Trained Samples: 0</span>
+        <span id="cnnLossStat">Last Loss: --</span>
+      </div>
+    </div>
+
     <div class="settings-bar">
       <div class="setting-item">
-        <label for="modelSelect">Inference Engine</label>
+        <label for="modelSelect">AI Backbone Precision</label>
         <select id="modelSelect">
-          <option value="heavy" selected>MediaPipe Heavy (29MB) + Cranial Lock</option>
-          <option value="full">MediaPipe Full (9MB)</option>
-          <option value="lite">MediaPipe Lite (5.5MB)</option>
-          <option value="onnx">Custom Apex-CVA CNN (.onnx)</option>
+          <option value="heavy" selected>Heavy (29MB) + In-Browser CNN</option>
+          <option value="full">Full (9MB) + In-Browser CNN</option>
+          <option value="lite">Lite (5.5MB) + In-Browser CNN</option>
         </select>
       </div>
       <div class="setting-item">
@@ -284,13 +309,11 @@
     </div>
 
     <div class="controls">
-      <label class="btn primary" for="photoInput">📷 Snap / Photo</label>
+      <label class="btn primary" for="photoInput">📷 Snap / Upload Photo</label>
       <input type="file" id="photoInput" accept="image/*" />
-      <button id="camBtn" disabled>🎥 Live Cam</button>
-      <button id="labelBtn" class="cnn-btn" disabled>🎯 Save CNN Label</button>
-      <label class="btn cnn-btn" for="onnxInput">🧠 Load .ONNX CNN</label>
-      <input type="file" id="onnxInput" accept=".onnx" />
-      <button id="exportBtn" disabled>📊 Export CSV</button>
+      <button id="camBtn" disabled>🎥 Live Camera</button>
+      <button id="trainCnnBtn" class="cnn-btn" disabled>🧠 Train CNN on This Frame</button>
+      <button id="exportBtn" disabled>📊 Export CVA CSV</button>
     </div>
 
     <div class="telemetry-grid">
@@ -336,10 +359,10 @@
       <img id="sourceImage" alt="Uploaded lateral posture frame" />
       <canvas id="outputCanvas"></canvas>
       <div class="hud-overlay">
-        <div class="hud-tag" id="sideTag">Engine: MediaPipe Heavy</div>
-        <div class="hud-tag" id="dragHintTag">💡 Drag C7/Tragus onto bone → Tap 'Save CNN Label'</div>
+        <div class="hud-tag" id="sideTag">Engine: Heavy + TF.js CNN</div>
+        <div class="hud-tag" id="dragHintTag">💡 Drag C7/Tragus onto bone → Click 'Train CNN on This Frame'</div>
       </div>
-      <div id="status">Loading MediaPipe Pose Heavy model...</div>
+      <div id="status">Loading MediaPipe Heavy + In-Browser TensorFlow.js CNN...</div>
     </div>
   </div>
 
@@ -357,6 +380,10 @@
 
     const statusEl = document.getElementById("status");
     const posturePill = document.getElementById("posturePill");
+    const cnnStateText = document.getElementById("cnnStateText");
+    const cnnEpochStat = document.getElementById("cnnEpochStat");
+    const cnnLossStat = document.getElementById("cnnLossStat");
+
     const modelSelect = document.getElementById("modelSelect");
     const c7UpRange = document.getElementById("c7UpRange");
     const c7UpLabel = document.getElementById("c7UpLabel");
@@ -366,9 +393,8 @@
     const smoothLabel = document.getElementById("smoothLabel");
 
     const photoInput = document.getElementById("photoInput");
-    const onnxInput = document.getElementById("onnxInput");
     const camBtn = document.getElementById("camBtn");
-    const labelBtn = document.getElementById("labelBtn");
+    const trainCnnBtn = document.getElementById("trainCnnBtn");
     const exportBtn = document.getElementById("exportBtn");
 
     const video = document.getElementById("video");
@@ -379,16 +405,15 @@
 
     let visionResolver = null;
     let poseLandmarker = null;
-    let onnxSession = null;
     let runningMode = "IMAGE";
     let webcamRunning = false;
     let facingMode = "environment";
     let currentStream = null;
-    let currentPhotoName = "lateral_frame.jpg";
 
     let smoothedLandmarks = null;
     let lastRawLandmarks = null;
     let sessionLogs = [];
+    let trainedSampleCount = 0;
 
     let manualNodes = {
       c7: null,
@@ -399,6 +424,134 @@
       sideLabel: "Lateral"
     };
     let draggingKey = null;
+
+    let biomechCnnModel = null;
+
+    async function initInBrowserCNN() {
+      const tf = window.tf;
+      if (!tf) return;
+      try {
+        biomechCnnModel = await tf.loadLayersModel("localstorage://apex_cva_cnn_v35");
+        cnnStateText.textContent = "Loaded Saved CNN Weights from Browser Memory";
+      } catch (_) {
+        const patchInput = tf.input({ shape: [32, 32, 3], name: "cervical_patch" });
+        const geomInput = tf.input({ shape: [8], name: "skeletal_vectors" });
+
+        let x = tf.layers.conv2d({ filters: 16, kernelSize: 3, padding: "same", activation: "relu" }).apply(patchInput);
+        x = tf.layers.maxPooling2d({ poolSize: 2 }).apply(x);
+        x = tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: "same", activation: "relu" }).apply(x);
+        x = tf.layers.globalAveragePooling2d({}).apply(x);
+
+        const combined = tf.layers.concatenate().apply([x, geomInput]);
+        let h = tf.layers.dense({ units: 64, activation: "relu" }).apply(combined);
+        h = tf.layers.dense({ units: 32, activation: "relu" }).apply(h);
+        const deltaOut = tf.layers.dense({
+          units: 4,
+          activation: "tanh",
+          kernelInitializer: "zeros",
+          biasInitializer: "zeros"
+        }).apply(h);
+
+        biomechCnnModel = tf.model({ inputs: [patchInput, geomInput], outputs: deltaOut });
+      }
+      biomechCnnModel.compile({
+        optimizer: tf.train.adam(0.002),
+        loss: "meanSquaredError"
+      });
+    }
+    initInBrowserCNN();
+
+    function extractCnnFeatures(baseNodes, width, height) {
+      const tf = window.tf;
+      const off = document.createElement("canvas");
+      off.width = 32;
+      off.height = 32;
+      const octx = off.getContext("2d");
+
+      const minX = Math.max(0, Math.min(baseNodes.tragus.x, baseNodes.acromion.x) - 40);
+      const maxX = Math.min(width, Math.max(baseNodes.tragus.x, baseNodes.acromion.x) + 40);
+      const minY = Math.max(0, Math.min(baseNodes.eye.y, baseNodes.tragus.y) - 30);
+      const maxY = Math.min(height, baseNodes.acromion.y + 30);
+      const cropW = Math.max(20, maxX - minX);
+      const cropH = Math.max(20, maxY - minY);
+
+      const srcEl = webcamRunning ? video : sourceImage;
+      octx.drawImage(srcEl, minX, minY, cropW, cropH, 0, 0, 32, 32);
+
+      const patchTensor = tf.browser.fromPixels(off).toFloat().div(255.0).expandDims(0);
+      const geomArray = [
+        baseNodes.c7.x / width,
+        baseNodes.c7.y / height,
+        baseNodes.tragus.x / width,
+        baseNodes.tragus.y / height,
+        baseNodes.eye.x / width,
+        baseNodes.eye.y / height,
+        baseNodes.acromion.x / width,
+        baseNodes.acromion.y / height
+      ];
+      const geomTensor = tf.tensor2d([geomArray], [1, 8]);
+      return { patchTensor, geomTensor };
+    }
+
+    function applyCnnRefinement(baseNodes, width, height) {
+      if (!biomechCnnModel || !window.tf || trainedSampleCount === 0) return baseNodes;
+      return window.tf.tidy(() => {
+        const { patchTensor, geomTensor } = extractCnnFeatures(baseNodes, width, height);
+        const delta = biomechCnnModel.predict([patchTensor, geomTensor]).dataSync();
+        return {
+          ...baseNodes,
+          c7: {
+            x: baseNodes.c7.x + delta[0] * 0.12 * width,
+            y: baseNodes.c7.y + delta[1] * 0.12 * height
+          },
+          tragus: {
+            x: baseNodes.tragus.x + delta[2] * 0.12 * width,
+            y: baseNodes.tragus.y + delta[3] * 0.12 * height
+          }
+        };
+      });
+    }
+
+    trainCnnBtn.addEventListener("click", async () => {
+      if (!biomechCnnModel || !lastRawLandmarks || !manualNodes.c7) return;
+      const tf = window.tf;
+      trainCnnBtn.disabled = true;
+      cnnStateText.textContent = "Training Conv2D + Osteological Layers (20 Epochs)...";
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const baseNodes = computeAnatomicalNodes(lastRawLandmarks, width, height, false);
+
+      const targetDxC7 = Math.max(-0.99, Math.min(0.99, (manualNodes.c7.x - baseNodes.c7.x) / (0.12 * width)));
+      const targetDyC7 = Math.max(-0.99, Math.min(0.99, (manualNodes.c7.y - baseNodes.c7.y) / (0.12 * height)));
+      const targetDxTr = Math.max(-0.99, Math.min(0.99, (manualNodes.tragus.x - baseNodes.tragus.x) / (0.12 * width)));
+      const targetDyTr = Math.max(-0.99, Math.min(0.99, (manualNodes.tragus.y - baseNodes.tragus.y) / (0.12 * height)));
+
+      const { patchTensor, geomTensor } = extractCnnFeatures(baseNodes, width, height);
+      const targetTensor = tf.tensor2d([[targetDxC7, targetDyC7, targetDxTr, targetDyTr]], [1, 4]);
+
+      await biomechCnnModel.fit([patchTensor, geomTensor], targetTensor, {
+        epochs: 20,
+        callbacks: {
+          onEpochEnd: (epoch, logs) => {
+            cnnLossStat.textContent = `Last Loss: ${logs.loss.toFixed(5)}`;
+          }
+        }
+      });
+
+      patchTensor.dispose();
+      geomTensor.dispose();
+      targetTensor.dispose();
+
+      trainedSampleCount += 1;
+      cnnEpochStat.textContent = `Trained Samples: ${trainedSampleCount}`;
+      cnnStateText.textContent = "Saved Improved CNN Weights to Browser Memory ✓";
+      await biomechCnnModel.save("localstorage://apex_cva_cnn_v35");
+
+      recomputeFromStaticPhoto();
+      statusEl.textContent = `CNN trained on Sample #${trainedSampleCount}! C7 & Tragus osteological weights updated.`;
+      trainCnnBtn.disabled = false;
+    });
 
     c7UpRange.addEventListener("input", () => {
       c7UpLabel.textContent = `${c7UpRange.value}%`;
@@ -412,28 +565,7 @@
       smoothLabel.textContent = `${smoothRange.value}%`;
     });
 
-    onnxInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        statusEl.textContent = `Loading custom ONNX CNN (${file.name})...`;
-        const buffer = await file.arrayBuffer();
-        onnxSession = await window.ort.InferenceSession.create(buffer);
-        modelSelect.value = "onnx";
-        sideTag.textContent = `Engine: Apex-CVA ONNX (${file.name})`;
-        statusEl.textContent = `Custom Apex-CVA CNN loaded! Snap a photo or start live camera.`;
-      } catch (err) {
-        statusEl.textContent = "ONNX load error: " + err.message;
-      }
-    });
-
     async function loadPoseModel(variant = "heavy") {
-      if (variant === "onnx") {
-        if (!onnxSession) {
-          statusEl.textContent = "Tap 'Load .ONNX CNN' to select your trained apex_cva_cnn.onnx file.";
-        }
-        return;
-      }
       try {
         camBtn.disabled = true;
         statusEl.textContent = `Loading ${variant.toUpperCase()} biomechanical model...`;
@@ -456,8 +588,8 @@
         });
         smoothedLandmarks = null;
         camBtn.disabled = false;
-        sideTag.textContent = `Engine: MediaPipe ${variant.toUpperCase()}`;
-        statusEl.textContent = `Ready (${variant.toUpperCase()} active). Upload a 90° side-profile photo or start camera.`;
+        sideTag.textContent = `Engine: ${variant.toUpperCase()} + TF.js CNN`;
+        statusEl.textContent = `Ready! Upload a 90° side-profile photo or start live camera.`;
       } catch (err) {
         statusEl.textContent = "Model load error: " + err.message;
       }
@@ -465,36 +597,6 @@
 
     modelSelect.addEventListener("change", () => loadPoseModel(modelSelect.value));
     loadPoseModel("heavy");
-
-    async function runOnnxInference(imgSource, width, height) {
-      const offCanvas = document.createElement("canvas");
-      offCanvas.width = 256;
-      offCanvas.height = 256;
-      const offCtx = offCanvas.getContext("2d");
-      offCtx.drawImage(imgSource, 0, 0, 256, 256);
-      const imgData = offCtx.getImageData(0, 0, 256, 256).data;
-
-      const floatData = new Float32Array(3 * 256 * 256);
-      const planeSize = 256 * 256;
-      for (let i = 0; i < planeSize; i++) {
-        floatData[i] = imgData[i * 4] / 255.0;
-        floatData[planeSize + i] = imgData[i * 4 + 1] / 255.0;
-        floatData[2 * planeSize + i] = imgData[i * 4 + 2] / 255.0;
-      }
-
-      const inputTensor = new window.ort.Tensor("float32", floatData, [1, 3, 256, 256]);
-      const outputs = await onnxSession.run({ input_rgb: inputTensor });
-      const kp = outputs.keypoints_xy.data;
-
-      return {
-        sideLabel: "Apex-CNN Direct",
-        c7: { x: kp[0] * width, y: kp[1] * height },
-        tragus: { x: kp[2] * width, y: kp[3] * height },
-        eye: { x: kp[4] * width, y: kp[5] * height },
-        acromion: { x: kp[6] * width, y: kp[7] * height },
-        hip: { x: kp[8] * width, y: kp[9] * height }
-      };
-    }
 
     function filterLandmarks(rawLm, isVideoFrame) {
       if (!isVideoFrame || !smoothedLandmarks) {
@@ -526,7 +628,7 @@
       return (Math.atan2(dx, dy) * 180.0) / Math.PI;
     }
 
-    function computeAnatomicalNodes(lm, width, height) {
+    function computeAnatomicalNodes(lm, width, height, useCnn = true) {
       const rightVis = (lm[8]?.visibility || 0) + (lm[12]?.visibility || 0);
       const leftVis = (lm[7]?.visibility || 0) + (lm[11]?.visibility || 0);
       const isRightProfile = rightVis >= leftVis;
@@ -555,7 +657,7 @@
       const c7X = acromionX + posteriorDirX * (neckVertDist * backFactor);
       const c7Y = acromionY - (neckVertDist * upFactor);
 
-      return {
+      const baseNodes = {
         sideLabel: isRightProfile ? "Right Lateral" : "Left Lateral",
         tragus: { x: tragusX, y: tragusY },
         c7: { x: c7X, y: c7Y },
@@ -563,6 +665,7 @@
         acromion: { x: acromionX, y: acromionY },
         hip: { x: hipX, y: hipY }
       };
+      return useCnn ? applyCnnRefinement(baseNodes, width, height) : baseNodes;
     }
 
     function drawAndMeasure(nodes, width, height) {
@@ -632,7 +735,7 @@
         trunk_deg: trunk.toFixed(2)
       });
       exportBtn.disabled = false;
-      labelBtn.disabled = false;
+      trainCnnBtn.disabled = false;
     }
 
     function drawVector(p1, p2, color, width) {
@@ -690,7 +793,7 @@
     function recomputeFromStaticPhoto() {
       if (!lastRawLandmarks) return;
       ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
-      manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height);
+      manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height, true);
       drawAndMeasure(manualNodes, canvas.width, canvas.height);
     }
 
@@ -732,12 +835,12 @@
       const pt = getCanvasCoords(evt);
       manualNodes[draggingKey] = { x: pt.x, y: pt.y };
       redrawManualStaticPhoto();
-      statusEl.textContent = `Fine-tuning ${draggingKey.toUpperCase()} bony landmark...`;
+      statusEl.textContent = `Fine-tuning ${draggingKey.toUpperCase()}... Click 'Train CNN on This Frame' when locked!`;
     }
 
     function onPointerUp() {
       if (draggingKey) {
-        statusEl.textContent = `Locked ${draggingKey.toUpperCase()}! Tap 'Save CNN Label' to export training JSON.`;
+        statusEl.textContent = `Locked ${draggingKey.toUpperCase()}! Click '🧠 Train CNN on This Frame' to teach the neural network.`;
         draggingKey = null;
       }
     }
@@ -752,7 +855,6 @@
     photoInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      currentPhotoName = file.name;
       if (webcamRunning) stopCamera();
 
       const url = URL.createObjectURL(file);
@@ -761,11 +863,7 @@
         canvas.height = sourceImage.naturalHeight;
         ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
 
-        if (modelSelect.value === "onnx" && onnxSession) {
-          manualNodes = await runOnnxInference(sourceImage, canvas.width, canvas.height);
-          drawAndMeasure(manualNodes, canvas.width, canvas.height);
-          statusEl.textContent = "Predicted directly by your Custom Apex-CVA ONNX CNN!";
-        } else if (poseLandmarker) {
+        if (poseLandmarker) {
           if (runningMode !== "IMAGE") {
             runningMode = "IMAGE";
             await poseLandmarker.setOptions({ runningMode: "IMAGE" });
@@ -773,9 +871,9 @@
           const result = poseLandmarker.detect(sourceImage);
           if (result.landmarks && result.landmarks.length > 0) {
             lastRawLandmarks = result.landmarks[0];
-            manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height);
+            manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height, true);
             drawAndMeasure(manualNodes, canvas.width, canvas.height);
-            statusEl.textContent = "Drag C7/Tragus onto exact bony landmarks, then tap 'Save CNN Label'!";
+            statusEl.textContent = "Drag C7/Tragus onto exact bone, then click '🧠 Train CNN on This Frame'!";
           } else {
             statusEl.textContent = "No pose detected in photo.";
           }
@@ -785,35 +883,8 @@
       sourceImage.src = url;
     });
 
-    labelBtn.addEventListener("click", () => {
-      if (!manualNodes.c7 || !canvas.width) return;
-      const w = canvas.width;
-      const h = canvas.height;
-      const annotation = {
-        image_path: currentPhotoName,
-        image_width: w,
-        image_height: h,
-        cva_deg: calcHorizontalAngle(manualNodes.c7, manualNodes.tragus).toFixed(2),
-        cra_deg: calcHorizontalAngle(manualNodes.tragus, manualNodes.eye).toFixed(2),
-        fsa_deg: calcVerticalAngle(manualNodes.acromion, manualNodes.c7).toFixed(2),
-        keypoints: {
-          c7_spinous: { x: +(manualNodes.c7.x / w).toFixed(6), y: +(manualNodes.c7.y / h).toFixed(6) },
-          tragus: { x: +(manualNodes.tragus.x / w).toFixed(6), y: +(manualNodes.tragus.y / h).toFixed(6) },
-          eye_canthus: { x: +(manualNodes.eye.x / w).toFixed(6), y: +(manualNodes.eye.y / h).toFixed(6) },
-          acromion: { x: +(manualNodes.acromion.x / w).toFixed(6), y: +(manualNodes.acromion.y / h).toFixed(6) },
-          hip_trochanter: { x: +(manualNodes.hip.x / w).toFixed(6), y: +(manualNodes.hip.y / h).toFixed(6) }
-        }
-      };
-      const blob = new Blob([JSON.stringify(annotation, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `label_${currentPhotoName.replace(/\.[^/.]+$/, "")}.json`;
-      a.click();
-      statusEl.textContent = "Saved ground-truth CNN training label JSON for apex_cva_cnn.py!";
-    });
-
     async function startCamera() {
-      if (!poseLandmarker && !onnxSession) return;
+      if (!poseLandmarker) return;
       try {
         if (currentStream) currentStream.getTracks().forEach((t) => t.stop());
         currentStream = await navigator.mediaDevices.getUserMedia({
@@ -823,17 +894,17 @@
         video.srcObject = currentStream;
         await video.play();
 
-        if (poseLandmarker && runningMode !== "VIDEO") {
+        if (runningMode !== "VIDEO") {
           runningMode = "VIDEO";
           await poseLandmarker.setOptions({ runningMode: "VIDEO" });
         }
         smoothedLandmarks = null;
         webcamRunning = true;
         camBtn.textContent = "⏹ Stop Cam";
-        statusEl.textContent = "Live lateral tracking active.";
+        statusEl.textContent = "Live lateral tracking active (with In-Browser CNN refinement).";
         requestAnimationFrame(predictWebcam);
       } catch (err) {
-        statusEl.textContent = "Live camera requires HTTPS/localhost on Android. Use 'Snap / Photo'.";
+        statusEl.textContent = "Live camera requires HTTPS/localhost. Enable GitHub Pages to use live camera!";
       }
     }
 
@@ -843,7 +914,7 @@
         currentStream.getTracks().forEach((t) => t.stop());
         currentStream = null;
       }
-      camBtn.textContent = "🎥 Live Cam";
+      camBtn.textContent = "🎥 Live Camera";
     }
 
     camBtn.addEventListener("click", () => {
@@ -860,16 +931,11 @@
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        if (modelSelect.value === "onnx" && onnxSession) {
-          manualNodes = await runOnnxInference(video, canvas.width, canvas.height);
+        const result = poseLandmarker.detectForVideo(video, performance.now());
+        if (result.landmarks && result.landmarks.length > 0) {
+          lastRawLandmarks = filterLandmarks(result.landmarks[0], true);
+          manualNodes = computeAnatomicalNodes(lastRawLandmarks, canvas.width, canvas.height, true);
           drawAndMeasure(manualNodes, canvas.width, canvas.height);
-        } else if (poseLandmarker) {
-          const result = poseLandmarker.detectForVideo(video, performance.now());
-          if (result.landmarks && result.landmarks.length > 0) {
-            const filtered = filterLandmarks(result.landmarks[0], true);
-            manualNodes = computeAnatomicalNodes(filtered, canvas.width, canvas.height);
-            drawAndMeasure(manualNodes, canvas.width, canvas.height);
-          }
         }
       }
       if (webcamRunning) requestAnimationFrame(predictWebcam);
